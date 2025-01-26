@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Restaurant Profil{% endblock %}
+
+{% block body %}
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+    <div class="w-100" style="max-width: 500px;">
+        <main class="form-signin">
+            <h1 class="h3 mb-3 fw-normal text-center fw-bold mb-4" style="margin-top: 50px;">Restaurant Profil</h1>
+
+            <!-- Форма редактирования данных -->
+            <form action="/update_profile_restaurant" method="POST">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body">
+                        <h5 class="card-title text-center mb-4">Daten bearbeiten</h5>
+
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="name" name="name" placeholder="Name" value="{{ restaurant.name }}">
+                            <label for="name">Name</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control" id="email" name="email" placeholder="Email" value="{{ restaurant.email }}">
+                            <label for="email">Email</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="adresse" name="adresse" placeholder="Adresse" value="{{ restaurant.adresse }}">
+                            <label for="adresse">Adresse</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="postleitzahl" name="postleitzahl" placeholder="PLZ" value="{{ restaurant.postleitzahl }}">
+                            <label for="postleitzahl">PLZ</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <textarea class="form-control" id="beschreibung" name="beschreibung" placeholder="Beschreibung">{{ restaurant.beschreibung }}</textarea>
+                            <label for="beschreibung">Beschreibung</label>
+                        </div>
+
+                        <!-- Поля для времени работы -->
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="arbeitstage" name="arbeitstage" placeholder="z.B. Mo-Fr" value="{{ restaurant.arbeitstage }}">
+                            <label for="arbeitstage">Arbeitstage</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="oeffnungszeiten" name="oeffnungszeiten" placeholder="z.B. 09:00-22:00" value="{{ restaurant.oeffnungszeiten }}">
+                            <label for="oeffnungszeiten">Öffnungszeiten</label>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center">
+                        <!-- Кнопка сохранения изменений -->
+                        <button type="submit" class="btn btn-orange w-100 py-2 mb-2">Daten speichern</button>
+                        <a href="/logout" class="btn btn-light border w-100 py-2">Abmelden</a>
+                    </div>
+                </div>
+            </form>
+        </main>
+    </div>
+</div>
+{% endblock %}

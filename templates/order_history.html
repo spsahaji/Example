@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Bestellhistorie{% endblock %}
+
+{% block body %}
+<div class="container">
+    <h2 class="py-3">Bestellhistorie</h2>
+
+    <h4 class="my-3">Laufende Bestellungen</h4>
+    <ul>
+        {% for order in orders_active %}
+        <li>
+            Bestellung #{{ order.id }} - Status: {{ order.status }} - Erstellt am {{ order.erstellt_am }}
+            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-link">Details</a>
+        </li>
+        {% else %}
+        <p>Keine laufenden Bestellungen.</p>
+        {% endfor %}
+    </ul>
+
+    <h4 class="my-3">Abgeschlossene/Stornierte Bestellungen</h4>
+    <ul>
+        {% for order in orders_completed %}
+        <li>
+            Bestellung #{{ order.id }} - Status: {{ order.status }} - Erstellt am {{ order.erstellt_am }}
+            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-link">Details</a>
+        </li>
+        {% else %}
+        <p>Keine abgeschlossenen Bestellungen.</p>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

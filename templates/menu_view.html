@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+
+{% block title %}Restaurant Menü{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+  <!-- Описание ресторана -->
+  <div class="row py-lg-5">
+    <div class="col-lg-6 col-md-8 mx-auto">
+      <h1 class="fw-light">{{ restaurant.name }}</h1>
+      <p class="lead text-body-secondary">
+        {{ restaurant.beschreibung }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Отображение меню -->
+  <div class="container px-4 py-5" id="restaurant-menu">
+    <h2 class="pb-2 border-bottom">Menü</h2>
+    <div class="row g-4 py-5 row-cols-1 row-cols-lg-2">
+      {% for menu_item in menu_items %}
+      <div class="col d-flex align-items-start">
+        <div class="icon-square text-body-emphasis bg-body-secondary d-inline-flex align-items-center justify-content-center fs-4 flex-shrink-0 me-3">
+          <i class="bi bi-clipboard-plus"></i> <!-- Bootstrap-Icon -->
+        </div>
+        <div>
+          <h3 class="fs-2 text-body-emphasis">{{ menu_item.item }}</h3>
+          <p>{{ menu_item.beschreibung }}</p>
+          <p><strong>Preis:</strong> €{{ "%.2f"|format(menu_item.preis) }}</p>
+          <form class="add-to-cart-form d-flex" data-item-id="{{ menu_item.id }}">
+            <label class="me-2">
+              <input type="number" name="quantity" min="1" class="form-control quantity-input" placeholder="Menge" required>
+            </label>
+            <button type="button" class="btn btn-dark-green add-to-cart">In den Warenkorb</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Кнопка перехода на страницу чекаута -->
+  <div class="text-center mt-5">
+    <a href="{{ url_for('checkout') }}" class="btn btn-orange">Weiter zum Checkout</a>
+  </div>
+
+  <!-- Корзина -->
+  <div class="cart mt-4">
+    <h4>Ihr Warenkorb</h4>
+    <ul class="list-group">
+      {% if session.get('cart') %}
+      {% for item in session['cart'] %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          {{ item.name }}
+          <form
+                  action="{{ url_for('update_quantity') }}"
+                  method="POST"
+                  class="d-inline update-quantity-form">
+            <input type="hidden" name="item_id" value="{{ item['id'] }}">
+            <label>
+              <input
+                      type="number"
+                      name="quantity"
+                      value="{{ item['quantity'] }}"
+                      min="1"
+                      class="form-control d-inline w-25 quantity-input"
+              >
+            </label>
+          </form>
+        </div>
+        <div>
+          <span class="item-total">€{{ "%.2f"|format(item['price'] * item['quantity']) }}</span> <!-- Отображаем стоимость товара -->
+          <form action="{{ url_for('remove_from_cart') }}" method="POST" class="d-inline">
+            <input type="hidden" name="item_id" value="{{ item['id'] }}">
+            <button class="btn btn-sm btn-danger">Entfernen</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+      {% else %}
+      <li class="list-group-item">Ihr Warenkorb ist leer.</li>
+      {% endif %}
+    </ul>
+  </div>
+</div>
+<li class="list-group-item d-flex justify-content-between">
+  <span>Gesamt (EUR)</span>
+  <!-- Используем переданную из Python-логики общую стоимость -->
+  <strong id="total-price">€{{ "%.2f"|format(total_price) }}</strong>
+</li>
+<!-- Отображение всплывающего сообщения -->
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  {{ messages[0] }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // === Динамическое добавление товара в корзину ===
+    const cartForms = document.querySelectorAll('.add-to-cart-form');
+    cartForms.forEach(form => {
+      const button = form.querySelector('.add-to-cart');
+      const quantityInput = form.querySelector('.quantity-input');
+
+      button.addEventListener('click', () => {
+        const itemId = form.getAttribute('data-item-id');
+        const quantity = quantityInput.value || 1;
+
+        // Отправляем запрос на сервер для добавления товара в корзину
+        fetch('{{ url_for("add_to_cart") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            'item_id': itemId,
+            'quantity': String(quantity)
+          })
+        })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.error) {
+                    console.error(data.error);
+                  } else {
+                    updateCartUI(data.cart_items, data.total_price);
+                  }
+                })
+                .catch(error => console.error('Ошибка при добавлении товара в корзину:', error));
+      });
+    });
+
+    // === Динамическое изменение количества товара ===
+    document.body.addEventListener('change', (event) => {
+      if (event.target.classList.contains('quantity-input')) {
+        const form = event.target.closest('.update-quantity-form');
+        const itemId = form.querySelector('input[name="item_id"]').value;
+        const quantity = event.target.value || 1;
+
+        // Отправляем запрос на сервер для обновления количества
+        fetch('{{ url_for("update_quantity") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            'item_id': itemId,
+            'quantity': String(quantity)
+          })
+        })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.error) {
+                    console.error(data.error);
+                  } else {
+                    updateCartUI(data.cart_items, data.total_price);
+                  }
+                })
+                .catch(error => console.error('Ошибка при обновлении количества товара:', error));
+      }
+    });
+
+    // === Динамическое удаление товара из корзины ===
+    document.body.addEventListener('submit', (event) => {
+      if (event.target.matches('.remove-from-cart-form')) { // Определяем форму удаления
+        event.preventDefault(); // Останавливаем стандартное поведение формы
+        const form = event.target;
+        const itemId = form.querySelector('input[name="item_id"]').value; // Получаем ID товара
+
+        // Отправляем POST-запрос на сервер
+        fetch('{{ url_for("remove_from_cart") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'item_id': itemId
+          }),
+        })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.error) {
+                    console.error(data.error);
+                  } else {
+                    // Обновляем корзину в UI
+                    updateCartUI(data.cart_items, data.total_price);
+                  }
+                })
+                .catch(error => console.error('Ошибка при удалении товара из корзины:', error));
+      }
+    });
+
+// === Функция для обновления UI корзины ===
+    function updateCartUI(cartItems, totalPrice) {
+      const cartList = document.querySelector('.cart .list-group'); // Контейнер списка товаров
+      const totalPriceElement = document.getElementById('total-price'); // Общая стоимость корзины
+
+      // Очищаем существующий список товаров в корзине
+      cartList.innerHTML = '';
+
+      // Если в корзине есть товары, добавляем их в список
+      if (cartItems.length > 0) {
+        cartItems.forEach(item => {
+          const cartItem = document.createElement('li');
+          cartItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+          cartItem.innerHTML = `
+        <div>
+          ${item.name}
+          <form class="d-inline update-quantity-form">
+            <input type="hidden" name="item_id" value="${item.id}">
+            <label>
+              <input type="number" name="quantity" value="${item.quantity}" min="1" class="form-control d-inline w-25 quantity-input">
+            </label>
+          </form>
+        </div>
+        <div>
+          <span class="item-total">€${item.total_price.toFixed(2)}</span>
+          <form class="d-inline remove-from-cart-form">
+            <input type="hidden" name="item_id" value="${item.id}">
+            <button class="btn btn-sm btn-danger">Entfernen</button>
+          </form>
+        </div>
+      `;
+          cartList.appendChild(cartItem);
+        });
+      } else {
+        // Если корзина пуста, выводим сообщение
+        const emptyMessage = document.createElement('li');
+        emptyMessage.className = 'list-group-item';
+        emptyMessage.textContent = 'Ihr Warenkorb ist leer.';
+        cartList.appendChild(emptyMessage);
+      }
+
+      // Обновляем общую стоимость
+      if (totalPriceElement) {
+        totalPriceElement.textContent = `€${totalPrice.toFixed(2)}`;
+      }
+    }
+  });
+</script>
+{% endblock %}
+{% endblock %}

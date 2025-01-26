@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Bestellbestätigung{% endblock %}
+
+{% block body %}
+<div class="container text-center mt-5">
+    <h2 class="mb-4">Vielen Dank für Ihre Bestellung!</h2>
+    <p>Ihre Bestellnummer: <strong>#{{ order.id }}</strong></p>
+    <p>Ramen Art hat Ihre Bestellung erhalten und bearbeitet.</p>
+    <hr>
+    <h4>Details zu Ihrer Bestellung:</h4>
+    <ul class="list-group mt-3">
+        {% for item in order.inhalt | fromjson %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ item['name'] }} (x{{ item['quantity'] }})</span>
+            <span>€{{ "%.2f"|format(item['price'] * item['quantity']) }}</span>
+        </li>
+        {% endfor %}
+        <li class="list-group-item">
+            <strong>Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}</strong>
+        </li>
+    </ul>
+    <a href="{{ url_for('restaurant_list') }}" class="btn btn-orange mt-4">Zurück zur Startseite</a>
+</div>
+{% endblock %}

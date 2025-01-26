@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout{% endblock %}
+
+{% block body %}
+<div class="container">
+  <main>
+    <div class="py-5 text-center">
+      <h2>Checkout</h2>
+      <p class="lead">Bitte überprüfen Sie Ihre Bestellung und fügen Sie Ihre Zahlungsdetails hinzu.</p>
+    </div>
+
+    <div class="row g-5">
+      <!-- Корзина -->
+      <div class="col-md-5 col-lg-4 order-md-last">
+        <h4 class="d-flex justify-content-between align-items-center mb-3">
+          <span class="custom-text">Ihr Warenkorb</span>
+          <span class="badge bg-primary rounded-pill">{{ cart_items | length }}</span>
+        </h4>
+        <ul class="list-group mb-3">
+          {% if cart_items %}
+          {% for item in cart_items %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="my-0">{{ item['name'] }}</h6>
+              <small class="text-body-secondary">Menge:</small>
+              <!-- Контейнер для форм -->
+              <div class="d-flex align-items-center mt-2">
+                <!-- Форма обновления количества -->
+                <form action="{{ url_for('update_quantity') }}" method="POST" class="me-2 update-form">
+                  <input type="hidden" name="item_id" value="{{ item['id'] }}">
+                  <label>
+                    <input type="number" name="quantity" value="{{ item['quantity'] }}" min="1"
+                           class="form-control w-50 quantity-input">
+                  </label>
+                </form>
+                <!-- Форма удаления товара -->
+                <form action="{{ url_for('remove_from_cart') }}" method="POST" class="remove-form">
+                  <input type="hidden" name="item_id" value="{{ item['id'] }}">
+                  <button class="btn btn-sm btn-danger btn-remove">Entfernen</button>
+                </form>
+              </div>
+            </div>
+            <span class="item-price">€{{ "%.2f"|format(item['price'] * item['quantity']) }}</span>
+          </li>
+          {% endfor %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>Gesamt (EUR)</span>
+            <strong id="total-price">€{{ "%.2f"|format(total_price) }}</strong>
+          </li>
+          {% else %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>Ihr Warenkorb ist leer.</span>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
+
+      <div class="d-flex justify-content-center mt-4">
+        <a href="{{ url_for('menu_view', restaurant_id=session.get('last_visited_restaurant_id', 1)) }}"
+           class="btn btn-orange">
+          Zurück zum Menü
+        </a>
+      </div>
+
+      <!-- Адрес и платежные данные -->
+      <div class="col-md-7 col-lg-8">
+        <h4 class="mb-3">Rechnungsadresse</h4>
+        <form class="needs-validation" novalidate method="POST" action="{{ url_for('process_checkout') }}">
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <label for="firstName" class="form-label">Vorname</label>
+              <input type="text" class="form-control" name="first_name" id="firstName" required>
+              <div class="invalid-feedback">
+                Bitte geben Sie einen gültigen Vornamen ein.
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <label for="lastName" class="form-label">Nachname</label>
+              <input type="text" class="form-control" name="last_name" id="lastName" required>
+              <div class="invalid-feedback">
+                Bitte geben Sie einen gültigen Nachnamen ein.
+              </div>
+            </div>
+            <div class="col-12">
+              <label for="email" class="form-label">E-Mail <span class="text-body-secondary">(Optional)</span></label>
+              <input type="email" class="form-control" name="email" id="email" placeholder="you@example.com">
+              <div class="invalid-feedback">
+                Bitte geben Sie eine gültige E-Mail-Adresse ein.
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h4 class="mb-3">Zahlung</h4>
+          <div class="my-3">
+            <div class="form-check">
+              <input id="credit" name="payment_method" type="radio" class="form-check-input" value="credit" checked
+                     required>
+              <label class="form-check-label" for="credit">Kreditkarte</label>
+            </div>
+            <div class="form-check">
+              <input id="paypal" name="payment_method" type="radio" class="form-check-input" value="paypal" required>
+              <label class="form-check-label" for="paypal">PayPal</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="bemerkungen">Bemerkungen (optional)</label>
+            <textarea name="bemerkungen" id="bemerkungen" class="form-control"></textarea>
+          </div>
+          <hr class="my-4">
+          <button class="btn btn-orange w-100 py-2 mb-4" type="submit">Bezahlen</button>
+        </form>
+      </div>
+    </div>
+  </main>
+</div>
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const quantityInputs = document.querySelectorAll('.quantity-input');
+    const removeButtons = document.querySelectorAll('.btn-remove');
+
+    // Обновление количества товаров
+    quantityInputs.forEach(input => {
+      input.addEventListener('change', () => {
+        const form = input.closest('.update-form');
+        const formData = new FormData(form);
+
+        fetch(form.action, {
+          method: form.method,
+          body: formData
+        })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.total_price !== undefined) {
+                    document.getElementById('total-price').textContent = `€${data.total_price.toFixed(2)}`;
+                    const priceElement = form.closest('li').querySelector('.item-price');
+                    priceElement.textContent = `€${data.item_total.toFixed(2)}`;
+                  }
+                })
+                .catch(console.error);
+      });
+    });
+
+    // Удаление товаров
+    removeButtons.forEach(button => {
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        const form = button.closest('.remove-form');
+        const formData = new FormData(form);
+
+        fetch(form.action, {
+          method: form.method,
+          body: formData
+        })
+                .then(response => response.json())
+                .then(data => {
+                  const item = button.closest('li');
+                  item.remove();
+                  document.getElementById('total-price').textContent = `€${data.total_price.toFixed(2)}`;
+                  if (data.cart_items.length === 0) {
+                    document.querySelector('.list-group').innerHTML =
+                            `<li class="list-group-item">Ihr Warenkorb ist leer.</li>`;
+                  }
+                })
+                .catch(console.error);
+      });
+    });
+  });
+</script>
+{% endblock %}
+{% endblock %}

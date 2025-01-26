@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Bestellhistorie - Restaurant{% endblock %}
+
+{% block body %}
+<div class="container">
+    <h2>Bestellungen</h2>
+
+    <h4>Aktive Bestellungen</h4>
+    <ul>
+        {% for order in orders_active %}
+        <li>
+            <div>
+                Bestellung #{{ order.id }} - Status: {{ order.status }} <br>
+                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}
+            </div>
+            <form method="POST" action="{{ url_for('update_order_status', order_id=order.id) }}">
+                <label>
+                    <select name="status">
+                        <option value="angenommen">Angenommen</option>
+                        <option value="abgelehnt">Abgelehnt</option>
+                        <option value="abgeschlossen">Abgeschlossen</option>
+                    </select>
+                </label>
+                <button type="submit">Status aktualisieren</button>
+            </form>
+        </li>
+        {% else %}
+        <li>
+            <div>Keine aktiven Bestellungen.</div>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h4>Abgeschlossene/Abgelehnte Bestellungen</h4>
+    <ul>
+        {% for order in orders_completed %}
+        <li>
+            <div>
+                Bestellung #{{ order.id }} - Status: {{ order.status }} <br>
+                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}
+            </div>
+        </li>
+        {% else %}
+        <li>
+            <div>Keine abgeschlossenen Bestellungen.</div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

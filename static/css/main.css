@@ -1,0 +1,56 @@
+/* HEADER*/
+.header__img {
+    height: 64px;
+    width: 73px;
+}
+/* Добавляем стиль для скрытия header */
+header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: #333; /* Например, темная шапка */
+    transition: transform 0.3s ease-in-out;
+}
+
+header.hidden {
+    transform: translateY(-100%); /* Скрываем header наверх */
+}
+body {
+    padding-top: 70px; /* Задайте высоту header, чтобы контент не прилипал к нему */
+}
+
+.btn-orange {
+    background-color: #cc7300; /* Темно-оранжевый */
+    color: white; /* Цвет текста - белый для контраста */
+    border: none; /* Убираем границу */
+}
+
+.btn-orange:hover {
+    background-color: #994d00; /* Ещё темнее при наведении */
+}
+
+@media (prefers-color-scheme: dark) {
+    .btn-orange {
+        background-color: #b05d00; /* Темнее оранжевый для тёмного режима */
+    }
+
+    .btn-orange:hover {
+        background-color: #804000; /* Ещё более тёмный оттенок */
+    }
+}
+
+.btn-dark-green {
+    background-color: #013220; /* Очень тёмный зелёный */
+    color: white; /* Белый текст для контраста */
+    border: none; /* Без границы */
+}
+
+.btn-dark-green:hover {
+    background-color: #004d26; /* Немного светлее при наведении */
+}
+
+.custom-text {
+    color: #000000; /* Зеленый цвет */
+}
+
