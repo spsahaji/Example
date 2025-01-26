@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+  <div class="w-100" style="max-width: 400px;">
+    <main class="form-signin">
+      <form method="post">
+        <h1 class="h3 mb-3 fw-normal text-center fw-bold mb-4" style="margin-top: 50px;">Registrieren</h1>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingVorname" placeholder="Vorname" name="vorname">
+          <label for="floatingVorname">Vorname</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingNachname" placeholder="Nachname" name="nachname">
+          <label for="floatingNachname">Nachname</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="email" class="form-control" id="floatingEmail" placeholder="Email" name="email">
+          <label for="floatingEmail">Email</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingAdresse" placeholder="Adresse" name="adresse">
+          <label for="floatingAdresse">Adresse</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingPostleitzahl" placeholder="PLZ" name="postleitzahl">
+          <label for="floatingPostleitzahl">PLZ</label>
+        </div>
+
+        <div class="form-floating mb-4">
+          <input type="password" class="form-control" id="floatingPasswort" placeholder="Passwort" name="passwort">
+          <label for="floatingPasswort">Passwort</label>
+        </div>
+
+        <button class="btn btn-orange w-100 py-2 mb-4" type="submit">Account erstellen</button>
+              <div class="d-flex align-items-center mb-3">
+          <hr class="flex-grow-1 border-muted">
+          <span class="mx-2 small text-muted">Du hast schon ein Konto?</span>
+          <hr class="flex-grow-1 border-muted">
+        </div>
+        <a href="/login" class="btn btn-light border w-100 py-2 mb-4">Anmelden</a>
+        <!-- Отступ для разделения перед AGB -->
+        <div class="small text-center text-muted mt-4">
+          Indem Sie auf „Account erstellen“ klicken, erklären Sie sich damit einverstanden, unsere
+          <a href="/terms" class="text-decoration-none">Allgemeinen Geschäftsbedingungen</a> zu akzeptieren und bestätigen, dass Sie unsere
+          <a href="/privacy" class="text-decoration-none">Datenschutzerklärung</a> gelesen haben.
+        </div>
+      </form>
+    </main>
+  </div>
+</div>
+{% endblock %}

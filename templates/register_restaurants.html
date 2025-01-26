@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+  <div class="w-100" style="max-width: 400px;">
+    <main class="form-signin">
+      <form action="/registration_restaurants" method="POST">
+        <h1 class="h3 mb-3 fw-normal text-center fw-bold mb-4" style="margin-top: 50px;">Noch heute mitmachen</h1>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingName" name="name" placeholder="Name">
+          <label for="floatingName">Name</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="email" class="form-control" id="floatingEmail" placeholder="Email" name="email">
+          <label for="floatingEmail">Email</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingAdresse" name="adresse" placeholder="Adresse">
+          <label for="floatingAdresse">Adresse</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingPostleitzahl" name="postleitzahl" placeholder="PLZ">
+          <label for="floatingPostleitzahl">PLZ</label>
+        </div>
+        <!-- Поле для Arbeitszeit (дни работы) -->
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingArbeitstage" name="arbeitstage" placeholder="z.B. Mo-Fr">
+          <label for="floatingArbeitstage">Arbeitstage (z.B. Mo-Fr, Sa-So)</label>
+        </div>
+
+        <!-- Поле для Oeffnungszeiten (время работы) -->
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingOeffnungszeiten" name="oeffnungszeiten" placeholder="z.B. 09:00-22:00">
+          <label for="floatingOeffnungszeiten">Öffnungszeiten (z.B. 09:00-22:00)</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="floatingBeschreibung" name="beschreibung" placeholder="Beschreibung">
+          <label for="floatingBeschreibung">Beschreibung</label>
+        </div>
+
+        <div class="form-floating mb-3">
+          <input type="password" class="form-control" id="floatingPasswort" name="passwort" placeholder="Passwort">
+          <label for="floatingPasswort">Passwort</label>
+        </div>
+        <button type="submit" class="btn btn-orange w-100 py-2 mb-4">Jetzt Partner werden</button>
+            <div class="small text-center text-muted">
+      Indem Sie auf „Jetzt Partner werden“ klicken, erklären Sie sich damit einverstanden, unsere
+      <a href="/terms" class="text-decoration-none">Allgemeinen Geschäftsbedingungen</a> zu akzeptieren und bestätigen, dass Sie unsere
+      <a href="/privacy" class="text-decoration-none">Datenschutzerklärung</a> gelesen haben.
+    </div>
+      </form>
+    </main>
+  </div>
+</div>
+{% endblock %}
+
+

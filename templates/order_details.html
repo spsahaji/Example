@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Details zur Bestellung #{{ order.id }}{% endblock %}
+
+{% block body %}
+<div class="py-5">
+    <h2>Details zur Bestellung #{{ order.id }}</h2>
+    <p><strong>Status:</strong> {{ order.status }}</p>
+    <p><strong>Erstellt am:</strong> {{ order.erstellt_am.strftime('%d.%m.%Y %H:%M') }}</p>
+    <p><strong>Bemerkungen:</strong> {{ order.bemerkungen or "Keine" }}</p>
+
+    <h3>Kunde</h3>
+    <p>{{ order.kunde.vorname }} {{ order.kunde.nachname }}</p>
+    <p>{{ order.kunde.adresse }}, {{ order.kunde.postleitzahl }}</p>
+
+    <h3>Artikel:</h3>
+    <ul>
+        {% for item in order.items %}
+        <li>
+            <strong>{{ item.item_name }}</strong>: {{ item.quantity }} × {{ item.price }}€
+            = {{ (item.quantity * item.price) | round(2) }}€
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h4>Gesamtpreis:
+        {{ order.items | sum(attribute='price') }}€
+    </h4>
+
+    <a href="{{ url_for('order_history_restaurant') }}" class="btn btn-secondary">Zurück</a>
+</div>
+{% endblock %}

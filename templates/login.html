@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Anmelden{% endblock %}
+
+{% block body %}
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+  <div class="w-100" style="max-width: 400px;">
+    <main class="form-signin">
+      <form method="POST">
+        <h1 class="h3 mb-3 fw-normal text-center fw-bold mb-4" style="margin-top: 50px;">Anmelden</h1>
+
+        <div class="form-floating mb-3">
+          <input type="email" class="form-control" id="floatingEmail" placeholder="Email" name="email">
+          <label for="floatingEmail">Email</label>
+        </div>
+
+        <div class="form-floating mb-4">
+   <input type="password" class="form-control" id="floatingPassword" placeholder="Passwort" name="passwort">
+          <label for="floatingPassword">Passwort</label>
+        </div>
+
+        <button class="btn btn-orange w-100 py-2 mb-4" type="submit">Anmelden</button>
+
+        <div class="d-flex align-items-center mb-3">
+          <hr class="flex-grow-1 border-muted">
+          <span class="mx-2 small text-muted">Noch nicht registriert?</span>
+          <hr class="flex-grow-1 border-muted">
+        </div>
+        <a href="/registration_users" class="btn btn-light border w-100 py-2 mb-4">Konto erstellen</a>
+        <div class="small text-center text-muted">
+          Durch das Erstellen eines Kontos erklären Sie sich damit einverstanden, unsere
+          <a href="/terms" class="text-decoration-none">Allgemeinen Geschäftsbedingungen</a> zu akzeptieren und bestätigen, dass Sie unsere
+          <a href="/privacy" class="text-decoration-none">Datenschutzerklärung</a> gelesen haben.
+        </div>
+
+        <p class="mt-5 mb-3 text-body-secondary text-center">© 2025 Lieferspatz</p>
+      </form>
+    </main>
+  </div>
+</div>
+{% endblock %}
