@@ -11,7 +11,7 @@
         {% for order in orders_active %}
         <li>
             Bestellung #{{ order.id }} - Status: {{ order.status }} - Erstellt am {{ order.erstellt_am }}
-            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-link">Details</a>
+            <a href="{{ url_for('order_confirmation', order_id=order.id) }}" class="btn btn-sm btn-link">Details ansehen</a>
         </li>
         {% else %}
         <p>Keine laufenden Bestellungen.</p>

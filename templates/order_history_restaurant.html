@@ -6,24 +6,31 @@
 <div class="container">
     <h2>Bestellungen</h2>
 
+    <!-- Active Orders -->
     <h4>Aktive Bestellungen</h4>
     <ul>
         {% for order in orders_active %}
         <li>
             <div>
-                Bestellung #{{ order.id }} - Status: {{ order.status }} <br>
+                <strong>Bestellung #{{ order.id }}</strong> - Status: {{ order.status }}<br>
                 Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}
             </div>
+            <!-- Если статус текущий в 'in Bearbeitung', можно изменить -->
+            {% if order.status == 'in Bearbeitung' or order.status == 'angenommen' %}
             <form method="POST" action="{{ url_for('update_order_status', order_id=order.id) }}">
                 <label>
                     <select name="status">
-                        <option value="angenommen">Angenommen</option>
+                        {% if order.status == 'in Bearbeitung' %}
+                        <option value="angenommen">In Zubereitung (angenommen)</option>
                         <option value="abgelehnt">Abgelehnt</option>
+                        {% elif order.status == 'angenommen' %}
                         <option value="abgeschlossen">Abgeschlossen</option>
+                        {% endif %}
                     </select>
                 </label>
                 <button type="submit">Status aktualisieren</button>
             </form>
+            {% endif %}
         </li>
         {% else %}
         <li>

@@ -1,10 +1,16 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone, time
 import re
 from flask_socketio import SocketIO
 from flask_migrate import Migrate
 import json
+
+import pytz
+
+local_tz = pytz.timezone("Europe/Berlin")  # Укажите временную зону ресторана
+now = datetime.now(local_tz)
+current_time = now.time()
 
 
 app = Flask(__name__)
@@ -60,7 +66,7 @@ class Bestellung(db.Model):
     bemerkungen = db.Column(db.String(255))  # Уточнения (если есть)
     status = db.Column(db.String(50), default="in Bearbeitung")  # Статус заказа (по умолчанию "В обработке")
     gesamtkosten = db.Column(db.Float, nullable=False)  # Общая стоимость заказа
-    erstellt_am = db.Column(db.DateTime, default=datetime.utcnow)  # Дата создания заказа
+    erstellt_am = db.Column(db.DateTime, default=datetime.now(timezone.utc)) # Дата создания заказа
 
     # Связи
     kunde = db.relationship("Kunde", backref="bestellungen", lazy=True)
@@ -269,26 +275,51 @@ def restaurant_list():
     # Получение списка всех ресторанов
     restaurants = Restaurant.query.all()
 
-    # Фильтр
-    open_restaurants = [
-        restaurant for restaurant in restaurants
-        if is_restaurant_open(restaurant.arbeitstage, restaurant.oeffnungszeiten)
-    ]
+    open_restaurants = []
+
+    for restaurant in restaurants:
+        is_open = is_restaurant_open(restaurant.arbeitstage, restaurant.oeffnungszeiten)
+        print(
+            f"DEBUG: Restaurant {restaurant.name} is_open={is_open} arbeitstage={restaurant.arbeitstage} oeffnungszeiten={restaurant.oeffnungszeiten}")
+        if is_open:
+            open_restaurants.append(restaurant)
 
     return render_template('restaurant_list.html', restaurants=open_restaurants)
 
 def is_restaurant_open(arbeitstage, oeffnungszeiten):
+    """
+    Проверяет, открыт ли ресторан в данный момент.
+    """
+    # Сопоставление дней недели с индексом Python
     weekday_map = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    today = datetime.now()
-    current_day = weekday_map[today.weekday()]  # Текущий день недели, например 'Mo'
-    current_time = today.strftime('%H:%M')  # Текущее время
+    now = datetime.now(timezone.utc)  # Используем текущее UTC-время
+    current_day = weekday_map[now.weekday()]  # Определяем текущий день недели (например, "Mo")
+    current_time = now.time()  # Текущее время
 
-    # Преобразовать введённые данные
-    parsed_days = parse_arbeitstage(arbeitstage)
-    parsed_time = parse_oeffnungszeiten(oeffnungszeiten)
+    # Парсим дни работы ресторана
+    parsed_days = parse_arbeitstage(arbeitstage)  # ['Mo', 'Di', 'Fr', ...]
 
-    # Проверить день и время
-    return current_day in parsed_days and parsed_time["start"] <= current_time <= parsed_time["end"]
+    # Если текущий день не входит в диапазон работы, сразу возвращаем False
+    if current_day not in parsed_days:
+        return False
+
+    # Парсим время работы ресторана
+    open_time_str, close_time_str = oeffnungszeiten.split("-")
+    open_time = datetime.strptime(open_time_str.strip(), "%H:%M").time()
+    close_time = datetime.strptime(close_time_str.strip(), "%H:%M").time()
+
+    # Проверяем диапазон времени
+    if open_time <= close_time:
+        # Если время работы находится в рамках одного дня
+        print(f"DEBUG: Single day check: {open_time} <= {current_time} <= {close_time}")
+        return open_time <= current_time <= close_time
+    else:
+        # Исправленная логика для времени, захватывающего полночь
+        print(f"DEBUG: Overnight check: {current_time} >= {open_time} or {current_time} <= {close_time}")
+        if close_time == time(0, 0):  # Обработка случая "00:30-00:00"
+            close_time_extended = time(23, 59, 59)  # Считаем полночь как конец текущего дня (24:00)
+            return open_time <= current_time or current_time <= close_time_extended
+        return current_time >= open_time or current_time <= close_time
 
 @app.route('/update_profile_restaurant', methods=['POST'])
 def update_profile_restaurant():
@@ -383,25 +414,22 @@ def menu_view(restaurant_id):
 
 @app.route('/edit_menu_item/<int:item_id>', methods=['POST'])
 def edit_menu_item(item_id):
-    """
-    Функция для редактирования пунктов меню.
-    """
     if not session.get('is_restaurant'):
-        return redirect(url_for('login'))  # Перенаправление к логину, если пользователь не авторизован.
+        return redirect(url_for('login'))
 
-    # Поиск элемента меню по ID. Если не найден, вернуть 404 ошибку.
     menu_item = Speisekarte.query.get_or_404(item_id)
-
-    # Обновление полей элемента меню на основе данных, отправленных пользователем.
     menu_item.item = request.form.get('item')
     menu_item.beschreibung = request.form.get('beschreibung')
-    menu_item.preis = float(request.form.get('preis', 0))
 
-    # Сохранение изменений в базе данных.
-    db.session.commit()
+    # Обновляем цену
+    try:
+        menu_item.preis = float(request.form.get('preis'))
+        db.session.commit()  # Сохраняем изменения в базе
+        flash('Preis wurde erfolgreich aktualisiert.', 'success')
+    except ValueError:
+        flash('Ungültiger Wert für Preis.', 'error')
 
-    flash('Menüpunkt wurde erfolgreich bearbeitet.', 'success')  # Сообщение об успешном редактировании.
-    return redirect(url_for('restaurant_menu'))  # Перенаправление обратно на страницу меню.
+    return redirect(url_for('restaurant_menu'))
 
 @app.route('/delete_menu_item/<int:item_id>', methods=['POST'])
 def delete_menu_item(item_id):
@@ -515,44 +543,51 @@ def process_checkout():
     try:
         kunde_id = session.get('user_id')
         if not kunde_id:
-            flash("Вы должны войти в систему для оформления заказа.", "error")
+            flash("Sie müssen sich anmelden, um Ihre Bestellung abzuschließen.", "error")
             return redirect(url_for('login'))
 
         restaurant_id = session.get('last_visited_restaurant_id')
         if not restaurant_id:
-            flash("Ресторан не найден. Пожалуйста, повторите попытку.", "error")
+            flash("Restaurant wurde nicht gefunden. Bitte erneut versuchen.", "error")
             return redirect(url_for('main'))
 
+        # Получаем товары из корзины (из сессии)
         cart = session.get('cart', [])
         if not cart:
-            flash("Ваша корзина пуста. Добавьте товары перед оформлением заказа.", "error")
+            flash("Ihr Warenkorb ist leer. Bitte fügen Sie Artikel hinzu, bevor Sie eine Bestellung aufgeben.", "error")
             return redirect(url_for('menu_view', restaurant_id=restaurant_id))
 
-        bemerkungen = request.form.get('bemerkungen', '')  # Примечания клиента
-        gesamtkosten = sum(item['price'] * item['quantity'] for item in cart)
+        # Примечания клиента
+        bemerkungen = request.form.get('bemerkungen', '')
 
-        # Создание новой записи в базе данных
-        neuer_bestellung = Bestellung(
+        # Рассчитать общую стоимость заказа
+        total_price = 0.0
+        for item in cart:
+            menu_item = Speisekarte.query.get(item['id'])
+            if menu_item:  # Используем цену на момент заказа
+                item['price'] = menu_item.preis
+                total_price += item['quantity'] * menu_item.preis
+
+        # Сохраняем заказ в базу данных
+        new_order = Bestellung(
             kunde_id=kunde_id,
             restaurant_id=restaurant_id,
-            inhalt=json.dumps(cart),  # Корзина в формате JSON
+            inhalt=json.dumps(cart),  # Сохраняем состав заказа
             bemerkungen=bemerkungen,
-            gesamtkosten=gesamtkosten,
-            status="in Bearbeitung",
-            erstellt_am=datetime.utcnow()
+            gesamtkosten=total_price,  # Поля total_price
+            erstellt_am=datetime.now(timezone.utc)
         )
-        db.session.add(neuer_bestellung)
+        db.session.add(new_order)
         db.session.commit()
 
-        # Очищаем корзину из сессии
+        # Очищаем корзину
         session.pop('cart', None)
 
-        # Перенаправляем на страницу подтверждения заказа
-        return redirect(url_for('order_confirmation', order_id=neuer_bestellung.id))
+        return redirect(url_for('order_confirmation', order_id=new_order.id))
 
     except Exception as e:
         db.session.rollback()
-        flash(f"Ошибка при оформлении заказа: {e}", "error")
+        flash(f"Fehler bei der Bestellung: {e}", "error")
         return redirect(url_for('checkout'))
 
 @app.route('/order_confirmation/<int:order_id>')
@@ -576,14 +611,16 @@ def order_history():
         flash("Bitte melden Sie sich an, um Ihre Bestellungen zu sehen.", "error")
         return redirect(url_for('login'))
 
+    # Активные заказы: те, что только находятся "в обработке" или "готовятся" (приняты)
     orders_active = Bestellung.query.filter(
         Bestellung.kunde_id == kunde_id,
-        ~Bestellung.status.in_(['abgeschlossen', 'storniert'])
+        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])  # Только эти статусы
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
+    # Завершенные: отклоненные или уже выполненные
     orders_completed = Bestellung.query.filter(
         Bestellung.kunde_id == kunde_id,
-        Bestellung.status.in_(['abgeschlossen', 'storniert'])
+        Bestellung.status.in_(['abgeschlossen', 'abgelehnt'])
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
     return render_template('order_history.html', orders_active=orders_active, orders_completed=orders_completed)
@@ -593,26 +630,36 @@ def update_order_status(order_id):
     if not session.get('is_restaurant'):
         return redirect(url_for('login'))
 
-    # Находим заказ по ID
+    # Получаем заказ
     order = Bestellung.query.get_or_404(order_id)
 
-    # Проверяем, что заказ принадлежит текущему ресторану
+    # Убедимся, что заказ принадлежит текущему ресторану
     restaurant_id = session.get('user_id')
     if order.restaurant_id != restaurant_id:
-        flash("Вы не можете редактировать этот заказ.", "error")
+        flash("Вы не можете изменять этот заказ.", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    # Получаем новый статус из формы
-    status = request.form.get('status')
-    if status not in ['in Bearbeitung', 'angenommen', 'abgelehnt', 'abgeschlossen']:
-        flash("Недопустимый статус заказа.", "error")
+    # Получаем новый статус
+    new_status = request.form.get('status')
+    valid_status_transitions = {
+        "in Bearbeitung": ["angenommen", "abgelehnt"],  # В обработке → принято/отклонено
+        "angenommen": ["abgeschlossen"],  # Принято → завершено
+        "abgelehnt": [],  # Отклонено — больше изменений невозможно
+        "abgeschlossen": []  # Завершено — больше изменений невозможно
+    }
+
+    if new_status not in valid_status_transitions[order.status]:
+        flash(f"Недопустимый переход статусов: {order.status} → {new_status}.", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    # Обновляем статус заказа
-    order.status = status
+    # Логируем для дебага
+    print(f"[DEBUG] Изменение статуса заказа #{order.id}: {order.status} → {new_status}")
+
+    # Обновляем статус
+    order.status = new_status
     db.session.commit()
 
-    flash(f'Статус заказа #{order.id} был обновлен на "{status}".', 'success')
+    flash(f"Статус заказа #{order.id} успешно обновлён на '{new_status}'.", 'success')
     return redirect(url_for('order_history_restaurant'))
 
 @app.route('/order_history_restaurant')
@@ -622,14 +669,16 @@ def order_history_restaurant():
 
     restaurant_id = session.get('user_id')
 
-    # Получаем активные заказы
-    orders_active = Bestellung.query.filter_by(restaurant_id=restaurant_id).filter(
-        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])
+    # Активные заказы: только в обработке или активно готовятся
+    orders_active = Bestellung.query.filter(
+        Bestellung.restaurant_id == restaurant_id,
+        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])  # Только активные статусы
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
-    # Получаем завершённые/отклонённые заказы
-    orders_completed = Bestellung.query.filter_by(restaurant_id=restaurant_id).filter(
-        Bestellung.status.in_(['abgelehnt', 'abgeschlossen'])
+    # Завершенные или отклоненные заказы
+    orders_completed = Bestellung.query.filter(
+        Bestellung.restaurant_id == restaurant_id,
+        Bestellung.status.in_(['abgeschlossen', 'abgelehnt'])  # Завершенные статусы
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
     return render_template(
