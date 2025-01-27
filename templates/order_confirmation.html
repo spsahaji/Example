@@ -13,7 +13,7 @@
         {% for item in order.inhalt | fromjson %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <span>{{ item['name'] }} (x{{ item['quantity'] }})</span>
-            <span>€{{ "%.2f"|format(item['price'] * item['quantity']) }}</span>
+            <span>€{{ "%.2f"|format(item['price_at_order'] * item['quantity']) }}</span>
         </li>
         {% endfor %}
         <li class="list-group-item">

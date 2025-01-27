@@ -6,52 +6,55 @@
 <div class="container">
     <h2>Bestellungen</h2>
 
-    <!-- Active Orders -->
+    <!-- Активные заказы -->
+    <!-- Активные заказы -->
     <h4>Aktive Bestellungen</h4>
     <ul>
         {% for order in orders_active %}
         <li>
             <div>
                 <strong>Bestellung #{{ order.id }}</strong> - Status: {{ order.status }}<br>
-                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}
+                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}<br>
+                Erstellt am: {{ order.erstellt_am.strftime('%d.%m.%Y %H:%M:%S') }}
             </div>
-            <!-- Если статус текущий в 'in Bearbeitung', можно изменить -->
-            {% if order.status == 'in Bearbeitung' or order.status == 'angenommen' %}
+
+            <a href="{{ url_for('order_details', order_id=order.id) }}" class="btn btn-sm btn-link">Details</a>
+
+            <!-- Форма для обновления статуса -->
             <form method="POST" action="{{ url_for('update_order_status', order_id=order.id) }}">
-                <label>
-                    <select name="status">
-                        {% if order.status == 'in Bearbeitung' %}
-                        <option value="angenommen">In Zubereitung (angenommen)</option>
-                        <option value="abgelehnt">Abgelehnt</option>
-                        {% elif order.status == 'angenommen' %}
-                        <option value="abgeschlossen">Abgeschlossen</option>
-                        {% endif %}
-                    </select>
-                </label>
-                <button type="submit">Status aktualisieren</button>
+                <label for="status_{{ order.id }}">Status ändern:</label>
+                <select name="status" id="status_{{ order.id }}" class="form-select form-select-sm">
+                    {% if order.status == 'in Bearbeitung' %}
+                    <option value="in Zubereitung">In Zubereitung</option>
+                    <option value="storniert">Storniert</option>
+                    {% elif order.status == 'in Zubereitung' %}
+                    <option value="abgeschlossen">Abgeschlossen</option>
+                    <option value="storniert">Storniert</option>
+                    {% endif %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary mt-2">Aktualisieren</button>
             </form>
-            {% endif %}
         </li>
         {% else %}
-        <li>
-            <div>Keine aktiven Bestellungen.</div>
-        </li>
+        <li>Keine aktiven Bestellungen.</li>
         {% endfor %}
     </ul>
 
-    <h4>Abgeschlossene/Abgelehnte Bestellungen</h4>
+    <!-- Раздел для завершенных и отмененных заказов -->
+    <h4>Abgeschlossene/Stornierte Bestellungen</h4>
     <ul>
         {% for order in orders_completed %}
         <li>
             <div>
-                Bestellung #{{ order.id }} - Status: {{ order.status }} <br>
-                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}
+                <strong>Bestellung #{{ order.id }}</strong> - Status: {{ order.status }}<br>
+                Gesamtkosten: €{{ "%.2f"|format(order.gesamtkosten) }}<br>
+                Erstellt am: {{ order.erstellt_am.strftime('%d.%m.%Y %H:%M:%S') }}
             </div>
+
+            <a href="{{ url_for('order_details', order_id=order.id) }}" class="btn btn-sm btn-link">Details</a>
         </li>
         {% else %}
-        <li>
-            <div>Keine abgeschlossenen Bestellungen.</div>
-        </li>
+        <li>Keine abgeschlossenen Bestellungen.</li>
         {% endfor %}
     </ul>
 </div>

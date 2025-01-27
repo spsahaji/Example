@@ -3,8 +3,8 @@
 {% block title %}Details zur Bestellung #{{ order.id }}{% endblock %}
 
 {% block body %}
-<div class="py-5">
-    <h2>Details zur Bestellung #{{ order.id }}</h2>
+<div class="container">
+    <h2>Bestelldetails #{{ order.id }}</h2>
     <p><strong>Status:</strong> {{ order.status }}</p>
     <p><strong>Erstellt am:</strong> {{ order.erstellt_am.strftime('%d.%m.%Y %H:%M') }}</p>
     <p><strong>Bemerkungen:</strong> {{ order.bemerkungen or "Keine" }}</p>
@@ -13,19 +13,17 @@
     <p>{{ order.kunde.vorname }} {{ order.kunde.nachname }}</p>
     <p>{{ order.kunde.adresse }}, {{ order.kunde.postleitzahl }}</p>
 
-    <h3>Artikel:</h3>
+    <h3>Bestellinhalt:</h3>
     <ul>
-        {% for item in order.items %}
+        {% for item in order_content %}
         <li>
-            <strong>{{ item.item_name }}</strong>: {{ item.quantity }} × {{ item.price }}€
-            = {{ (item.quantity * item.price) | round(2) }}€
+            <strong>{{ item.name }}</strong>: {{ item.quantity }} × {{ "%.2f"|format(item.price_at_order) }}€
+            = {{ "%.2f"|format(item.quantity * item.price_at_order) }}€
         </li>
         {% endfor %}
     </ul>
 
-    <h4>Gesamtpreis:
-        {{ order.items | sum(attribute='price') }}€
-    </h4>
+    <h4>Gesamtpreis: {{ "%.2f"|format(total_cost) }}€</h4>
 
     <a href="{{ url_for('order_history_restaurant') }}" class="btn btn-secondary">Zurück</a>
 </div>

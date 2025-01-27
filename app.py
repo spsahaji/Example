@@ -5,8 +5,8 @@ import re
 from flask_socketio import SocketIO
 from flask_migrate import Migrate
 import json
-
 import pytz
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 local_tz = pytz.timezone("Europe/Berlin")  # Укажите временную зону ресторана
 now = datetime.now(local_tz)
@@ -15,9 +15,16 @@ current_time = now.time()
 
 app = Flask(__name__)
 app.secret_key = 'simple_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db?check_same_thread=False'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ECHO'] = True
+
 db = SQLAlchemy(app)
+
+# Инициализация db_session в контексте приложения
+with app.app_context():
+    db_session = scoped_session(sessionmaker(bind=db.engine))
+
 migrate = Migrate(app, db)
 socketio = SocketIO(app)
 
@@ -66,7 +73,7 @@ class Bestellung(db.Model):
     bemerkungen = db.Column(db.String(255))  # Уточнения (если есть)
     status = db.Column(db.String(50), default="in Bearbeitung")  # Статус заказа (по умолчанию "В обработке")
     gesamtkosten = db.Column(db.Float, nullable=False)  # Общая стоимость заказа
-    erstellt_am = db.Column(db.DateTime, default=datetime.now(timezone.utc)) # Дата создания заказа
+    erstellt_am = db.Column(db.DateTime, default=datetime.now(timezone.utc))  # Дата создания заказа
 
     # Связи
     kunde = db.relationship("Kunde", backref="bestellungen", lazy=True)
@@ -168,68 +175,104 @@ def registration_restaurants():
     # Если GET-запрос, отобразить форму
     return render_template("register_restaurants.html")
 
-@app.route('/profile')
+@app.route('/profile', methods=['GET', 'POST'])
 def profile():
-    # Проверяем, авторизован ли пользователь
     user_email = session.get('user_email')
-    if not user_email:
+    is_restaurant = session.get('is_restaurant')
+
+    if not user_email:  # Если пользователь не авторизован
         return redirect(url_for('login'))
 
-    # Проверяем роль: Клиент или Ресторан
-    if session.get('is_restaurant'):
-        # Если ресторан, загружаем данные ресторана
-        restaurant = Restaurant.query.filter_by(email=user_email).first()
-        if not restaurant:
-            return redirect(url_for('login'))  # На случай удаления ресторана из базы
-        return render_template('profile_restaurant.html', restaurant=restaurant)
+    # Проверяем тип учетной записи
+    if is_restaurant:
+        entity = Restaurant.query.filter_by(email=user_email).first()
     else:
-        # Если клиент, загружаем данные клиента
         entity = Kunde.query.filter_by(email=user_email).first()
-        if not entity:
-            return redirect(url_for('login'))  # На случай удаления пользователя из базы
-        return render_template('profile.html', entity=entity)
+
+    if not entity:
+        flash("Benutzer nicht gefunden. Bitte melden Sie sich erneut an.", "error")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        # Обновляем данные пользователя
+        entity.vorname = request.form.get('vorname')
+        entity.nachname = request.form.get('nachname')
+        entity.email = request.form.get('email')
+        entity.adresse = request.form.get('adresse')
+        entity.postleitzahl = request.form.get('postleitzahl')
+
+        try:
+            db.session.commit()  # Сохраняем изменения
+            flash("Profil erfolgreich aktualisiert.", "success")
+        except Exception as e:
+            db.session.rollback()
+            flash("Ein Fehler ist aufgetreten. Bitte erneut versuchen.", "error")
+
+    return render_template('profile.html', entity=entity)
 
 @app.route('/restaurant_menu', methods=['GET', 'POST'])
 def restaurant_menu():
-    # Überprüfen, ob der Benutzer ein Restaurant ist
+    # Проверяем, пользователь - ресторан?
     if not session.get('is_restaurant'):
         return redirect(url_for('login'))
 
-    # Das aktuelle Restaurant basierend auf der E-Mail in der Session abrufen
+    # Получить информацию о текущем ресторане
     restaurant_email = session.get('user_email')
     restaurant = Restaurant.query.filter_by(email=restaurant_email).first()
 
-    # Wenn kein Restaurant gefunden wurde, zurück zur Login-Seite leiten
     if not restaurant:
         return redirect(url_for('login'))
 
-    # POST-Request: Neuer Menüpunkt wird hinzugefügt
     if request.method == 'POST':
         try:
-            # Formulardaten abrufen
-            item = request.form.get('item')  # Name des Gerichts
-            beschreibung = request.form.get('beschreibung')  # Beschreibung
-            preis = request.form.get('preis')  # Preis (€)
+            # Обработка данных формы
+            item = request.form.get('item')
+            beschreibung = request.form.get('beschreibung')
+            preis = request.form.get('preis')
 
-            # Neuen Menüpunkt erstellen und speichern
+            # Debug данных
+            print(f"DEBUG: POST-Daten -> item: {item}, beschreibung: {beschreibung}, preis: {preis}")
+
+            if not item or not preis:  # Проверить обязательные поля
+                flash("Das Gericht benötigt mindestens einen Namen und einen gültigen Preis.", 'danger')
+                return redirect(url_for('restaurant_menu'))
+
+            try:
+                preis = float(preis)  # Конвертировать цену
+            except ValueError:
+                flash("Ungültiges Format für Preis. Bitte geben Sie eine Zahl ein.", "danger")
+                return redirect(url_for("restaurant_menu"))
+
+            # Убедиться, что у ресторана есть ID
+            if not restaurant or not restaurant.id:
+                flash("Restaurant nicht gefunden. Bitte melden Sie sich erneut an.", "danger")
+                return redirect(url_for('login'))
+
+            # Лог ресторан
+            print(f"DEBUG: Restaurant ID = {restaurant.id}")
+
+            # Создать новый пункт меню
             new_menu_item = Speisekarte(
                 item=item,
                 beschreibung=beschreibung,
-                preis=float(preis),
+                preis=preis,
                 restaurant_id=restaurant.id
             )
+
+            # Сохранить в базе данных
             db.session.add(new_menu_item)
             db.session.commit()
 
-            flash('Menüpunkt erfolgreich hinzugefügt!', 'success')  # Erfolgsbenachrichtigung
+            flash('Menüpunkt erfolgreich hinzugefügt!', 'success')
         except Exception as e:
             db.session.rollback()
+            print(f"DEBUG: Fehler beim Hinzufügen: {str(e)}")
             flash(f'Fehler beim Hinzufügen des Menüpunkts: {str(e)}', 'danger')
 
-    # Alle Menüpunkte des aktuellen Restaurants abrufen
+    # Получить все элементы меню текущего ресторана
     menu_items = Speisekarte.query.filter_by(restaurant_id=restaurant.id).all()
 
-    # Template mit restaurant und menu_items rendern
+    # Вернуть рендеринг страницы
     return render_template('restaurant_menu.html', menu_items=menu_items, restaurant=restaurant)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -562,17 +605,26 @@ def process_checkout():
 
         # Рассчитать общую стоимость заказа
         total_price = 0.0
+        cart_snapshot = []
+
         for item in cart:
             menu_item = Speisekarte.query.get(item['id'])
             if menu_item:  # Используем цену на момент заказа
-                item['price'] = menu_item.preis
+                cart_item = {
+                    'item_id': menu_item.id,
+                    'name': menu_item.item,
+                    'beschreibung': menu_item.beschreibung,
+                    'price_at_order': menu_item.preis,
+                    'quantity': item['quantity']
+                }
+                cart_snapshot.append(cart_item)
                 total_price += item['quantity'] * menu_item.preis
 
         # Сохраняем заказ в базу данных
         new_order = Bestellung(
             kunde_id=kunde_id,
             restaurant_id=restaurant_id,
-            inhalt=json.dumps(cart),  # Сохраняем состав заказа
+            inhalt=json.dumps(cart_snapshot),  # Сохраняем содержимое заказа как "снимок"
             bemerkungen=bemerkungen,
             gesamtkosten=total_price,  # Поля total_price
             erstellt_am=datetime.now(timezone.utc)
@@ -592,16 +644,18 @@ def process_checkout():
 
 @app.route('/order_confirmation/<int:order_id>')
 def order_confirmation(order_id):
-    # Получаем заказ
-    order = Bestellung.query.get_or_404(order_id)
+    # Предполагаемая логика для получения заказа
+    order = db.session.query(Bestellung).filter_by(id=order_id).first()
 
-    # Преобразуем строку JSON из поля `inhalt` в Python-объект
-    try:
-        order_content = json.loads(order.inhalt)
-    except (TypeError, ValueError) as e:
-        return f"Ошибка обработки JSON: {e}", 400
+    # Проверяем, существует ли заказ
+    if order is None:
+        return "Order not found", 404
 
-    # Отправляем готовый Python-объект в шаблон
+    # Преобразование JSON-строки в словарь Python
+    order_content = json.loads(order.inhalt)
+
+    print("order_content:", order_content)  # Отладочный вывод
+
     return render_template('order_confirmation.html', order=order, order_content=order_content)
 
 @app.route('/order_history')
@@ -639,27 +693,27 @@ def update_order_status(order_id):
         flash("Вы не можете изменять этот заказ.", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    # Получаем новый статус
+    # Получаем новый статус из формы
     new_status = request.form.get('status')
+
+    # Варианты переходов статусов
     valid_status_transitions = {
-        "in Bearbeitung": ["angenommen", "abgelehnt"],  # В обработке → принято/отклонено
-        "angenommen": ["abgeschlossen"],  # Принято → завершено
-        "abgelehnt": [],  # Отклонено — больше изменений невозможно
-        "abgeschlossen": []  # Завершено — больше изменений невозможно
+        "in Bearbeitung": ["in Zubereitung", "storniert"],
+        "in Zubereitung": ["abgeschlossen", "storniert"],
+        "storniert": [],  # Отмененный заказ больше нельзя изменить
+        "abgeschlossen": []  # Завершенный заказ больше нельзя изменить
     }
 
-    if new_status not in valid_status_transitions[order.status]:
-        flash(f"Недопустимый переход статусов: {order.status} → {new_status}.", "error")
+    # Проверка, допустим ли переход
+    if new_status not in valid_status_transitions.get(order.status, []):
+        flash(f"Недопустимый переход статуса: {order.status} → {new_status}.", "error")
         return redirect(url_for('order_history_restaurant'))
-
-    # Логируем для дебага
-    print(f"[DEBUG] Изменение статуса заказа #{order.id}: {order.status} → {new_status}")
 
     # Обновляем статус
     order.status = new_status
     db.session.commit()
 
-    flash(f"Статус заказа #{order.id} успешно обновлён на '{new_status}'.", 'success')
+    flash(f"Статус заказа #{order.id} успешно обновлен на '{new_status}'.", "success")
     return redirect(url_for('order_history_restaurant'))
 
 @app.route('/order_history_restaurant')
@@ -669,16 +723,16 @@ def order_history_restaurant():
 
     restaurant_id = session.get('user_id')
 
-    # Активные заказы: только в обработке или активно готовятся
+    # Изменяем фильтрацию для активных заказов
     orders_active = Bestellung.query.filter(
         Bestellung.restaurant_id == restaurant_id,
-        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])  # Только активные статусы
+        Bestellung.status.in_(['in Bearbeitung', 'in Zubereitung'])  # Учитываем статус "in Zubereitung"
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
-    # Завершенные или отклоненные заказы
+    # Завершенные или отмененные заказы
     orders_completed = Bestellung.query.filter(
         Bestellung.restaurant_id == restaurant_id,
-        Bestellung.status.in_(['abgeschlossen', 'abgelehnt'])  # Завершенные статусы
+        Bestellung.status.in_(['abgeschlossen', 'storniert'])  # Завершенные статусы
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
     return render_template(
@@ -689,18 +743,38 @@ def order_history_restaurant():
 
 @app.route('/order_details/<int:order_id>')
 def order_details(order_id):
-    if not session.get('is_restaurant'):
+    if not session.get('is_restaurant') and not session.get('user_email'):
         return redirect(url_for('login'))
 
-    order = Bestellung.query.get_or_404(order_id)  # Получаем заказ
-    restaurant_id = session.get('user_id')
+    # Найти заказ по его ID
+    order = Bestellung.query.get_or_404(order_id)
 
-    # Проверяем, принадлежит ли заказ текущему ресторану
-    if order.restaurant_id != restaurant_id:
-        flash("Sie haben keine Berechtigung für diesen Auftrag.", "error")
+    try:
+        # Извлечь сохранённое содержимое заказа (JSON)
+        order_content = json.loads(order.inhalt)
+
+        # Нет необходимости проверять таблицу Speisekarte; берем данные прямо из заказа
+        for item in order_content:
+            if 'name' not in item or 'price_at_order' not in item:
+                # Если данные повреждены, добавляем сообщение об ошибке
+                item['name'] = "Unbekanntes Gericht"
+                item['price_at_order'] = 0.0
+            # quantity проверяется на всякий случай
+            item['quantity'] = item.get('quantity', 0)
+
+    except (TypeError, ValueError) as e:
+        flash(f"Fehler beim Verarbeiten der Bestelldetails: {e}", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    return render_template('order_details.html', order=order)
+    # Вычисляем общую сумму заказа
+    total_cost = sum(item['price_at_order'] * item['quantity'] for item in order_content)
+
+    return render_template(
+        'order_details.html',
+        order=order,
+        order_content=order_content,
+        total_cost=total_cost
+    )
 
 @app.route('/clear_cart')
 def clear_cart():
@@ -708,22 +782,9 @@ def clear_cart():
     flash('Ihr Warenkorb wurde geleert.', 'success')
     return redirect(request.referrer or url_for('checkout'))
 
-@app.route('/clear_database', methods=['GET', 'POST'])
-def clear_database_route():
-    """Очищает базу данных через HTTP-запрос (теперь доступно для GET и POST)."""
-    try:
-        db.session.query(Speisekarte).delete()
-        db.session.query(Restaurant).delete()
-        db.session.query(Kunde).delete()
-
-        db.session.commit()
-        return jsonify({'message': "База данных успешно очищена!"}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f"Ошибка при очистке базы данных: {str(e)}"}), 500
-
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Создание таблиц
     app.run(debug=True)
+    app.run(threaded=False)
+

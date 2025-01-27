@@ -8,26 +8,55 @@
         <main class="form-signin">
             <h1 class="h3 mb-3 fw-normal text-center fw-bold mb-4" style="margin-top: 50px;">Profil</h1>
 
-            <div class="card shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title text-center mb-4">Hallo, {{ entity.vorname }} {{ entity.nachname }}!</h5>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <strong>Email:</strong> {{ entity.email }}
-                        </li>
-                        <li class="list-group-item">
-                            <strong>Adresse:</strong> {{ entity.adresse }}
-                        </li>
-                        <li class="list-group-item">
-                            <strong>PLZ:</strong> {{ entity.postleitzahl }}
-                        </li>
-                    </ul>
+            <!-- Форма для редактирования -->
+            <form method="POST" action="/profile">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body">
+                        <h5 class="card-title text-center mb-4">Hallo, {{ entity.vorname }} {{ entity.nachname }}!</h5>
+
+                        <!-- Поле Email -->
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control" id="email" name="email" placeholder="Email"
+                                   value="{{ entity.email }}" required>
+                            <label for="email">Email</label>
+                        </div>
+
+                        <!-- Поле Vorname (имя) -->
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="vorname" name="vorname" placeholder="Vorname"
+                                   value="{{ entity.vorname }}" required>
+                            <label for="vorname">Vorname</label>
+                        </div>
+
+                        <!-- Поле Nachname (фамилия) -->
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="nachname" name="nachname" placeholder="Nachname"
+                                   value="{{ entity.nachname }}" required>
+                            <label for="nachname">Nachname</label>
+                        </div>
+
+                        <!-- Поле Adresse -->
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="adresse" name="adresse" placeholder="Adresse"
+                                   value="{{ entity.adresse }}">
+                            <label for="adresse">Adresse</label>
+                        </div>
+
+                        <!-- Поле Postleitzahl (почтовый индекс) -->
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="postleitzahl" name="postleitzahl"
+                                   placeholder="Postleitzahl" value="{{ entity.postleitzahl }}">
+                            <label for="postleitzahl">Postleitzahl (PLZ)</label>
+                        </div>
+                    </div>
+
+                    <!-- Кнопки сохранения и переходов -->
+                    <div class="card-footer text-center">
+                        <button type="submit" class="btn btn-orange w-100 py-2 mb-3">Daten speichern</button>
+                        <a href="/logout" class="btn btn-light border w-100 py-2">Abmelden</a>
+                    </div>
                 </div>
-                <div class="card-footer text-center">
-                    <a href="/orders" class="btn btn-orange w-100 py-2 mb-2">Meine Bestellungen</a>
-                    <a href="/logout" class="btn btn-light border w-100 py-2">Abmelden</a>
-                </div>
-            </div>
+            </form>
         </main>
     </div>
 </div>
