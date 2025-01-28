@@ -8,7 +8,7 @@ import json
 import pytz
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-local_tz = pytz.timezone("Europe/Berlin")  # Укажите временную зону ресторана
+local_tz = pytz.timezone("Europe/Berlin")
 now = datetime.now(local_tz)
 current_time = now.time()
 
@@ -21,14 +21,12 @@ app.config['SQLALCHEMY_ECHO'] = True
 
 db = SQLAlchemy(app)
 
-# Инициализация db_session в контексте приложения
 with app.app_context():
     db_session = scoped_session(sessionmaker(bind=db.engine))
 
 migrate = Migrate(app, db)
 socketio = SocketIO(app)
 
-# Модель клиента
 class Kunde(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vorname = db.Column(db.String(120), nullable=False)
@@ -38,8 +36,6 @@ class Kunde(db.Model):
     postleitzahl = db.Column(db.String(20), nullable=False)
     passwort = db.Column(db.String(120), nullable=False)
 
-
-# Модель ресторана
 class Restaurant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -49,11 +45,9 @@ class Restaurant(db.Model):
     beschreibung = db.Column(db.String(255), nullable=True)
     passwort = db.Column(db.String(120), nullable=False)
 
-    # Новое поле для рабочего времени
-    arbeitstage = db.Column(db.String(255), nullable=False)  # Для хранения дней работы (Mo-Su)
-    oeffnungszeiten = db.Column(db.String(255), nullable=False)  # Для хранения времени (например: "09:00-22:00")
+    arbeitstage = db.Column(db.String(255), nullable=False)
+    oeffnungszeiten = db.Column(db.String(255), nullable=False)
 
-# Модель меню
 class Speisekarte(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     item = db.Column(db.String(120), nullable=False)
@@ -66,14 +60,14 @@ class Speisekarte(db.Model):
 class Bestellung(db.Model):
     __tablename__ = 'bestellung'
 
-    id = db.Column(db.Integer, primary_key=True)  # Уникальный ID заказа
-    kunde_id = db.Column(db.Integer, db.ForeignKey('kunde.id'), nullable=False)  # ID клиента, оформившего заказ
-    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)  # ID ресторана
-    inhalt = db.Column(db.Text, nullable=False)  # Содержимое заказа в формате JSON
+    id = db.Column(db.Integer, primary_key=True)
+    kunde_id = db.Column(db.Integer, db.ForeignKey('kunde.id'), nullable=False)
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
+    inhalt = db.Column(db.Text, nullable=False)
     bemerkungen = db.Column(db.String(255))  # Уточнения (если есть)
-    status = db.Column(db.String(50), default="in Bearbeitung")  # Статус заказа (по умолчанию "В обработке")
-    gesamtkosten = db.Column(db.Float, nullable=False)  # Общая стоимость заказа
-    erstellt_am = db.Column(db.DateTime, default=datetime.now(timezone.utc))  # Дата создания заказа
+    status = db.Column(db.String(50), default="in Bearbeitung")
+    gesamtkosten = db.Column(db.Float, nullable=False)
+    erstellt_am = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Связи
     kunde = db.relationship("Kunde", backref="bestellungen", lazy=True)
@@ -94,7 +88,6 @@ def main():
 @app.route('/registration_users', methods=['GET', 'POST'])
 def registration_user():
     if request.method == 'POST':
-        # Получение данных формы
         vorname = request.form.get('vorname')
         nachname = request.form.get('nachname')
         email = request.form.get('email')
@@ -102,7 +95,6 @@ def registration_user():
         postleitzahl = request.form.get('postleitzahl')
         passwort = request.form.get('passwort')
 
-        # Создание нового пользователя
         new_user = Kunde(
             vorname=vorname,
             nachname=nachname,
@@ -114,17 +106,15 @@ def registration_user():
         db.session.add(new_user)
         db.session.commit()
 
-        # Сохраняем ID пользователя в сессию
         session['user_email'] = email
-        session['user_id'] = new_user.id  # <-- Сохраняем ID
-        session['is_restaurant'] = False  # Пользователь - не ресторан
+        session['user_id'] = new_user.id
+        session['is_restaurant'] = False
         return redirect(url_for('main'))
     return render_template("register_users.html")
 
 @app.route('/registration_restaurants', methods=['GET', 'POST'])
 def registration_restaurants():
     if request.method == 'POST':
-        # Получение данных из формы
         name = request.form.get('name')
         email = request.form.get('email')
         adresse = request.form.get('adresse')
@@ -134,26 +124,22 @@ def registration_restaurants():
         arbeitstage = request.form.get('arbeitstage')
         oeffnungszeiten = request.form.get('oeffnungszeiten')
 
-        # Валидация uniqueness email
         existing_restaurant = Restaurant.query.filter_by(email=email).first()
         if existing_restaurant:
             flash('Ein Restaurant mit dieser Email existiert bereits.', 'error')
             return redirect(request.url)
 
-        # Валидация arbeitstage (дни работы)
         weekday_pattern = r'^(?:Mo|Di|Mi|Do|Fr|Sa|So)(?:-(?:Mo|Di|Mi|Do|Fr|Sa|So))?$'
         for part in arbeitstage.split(', '):
             if not re.match(weekday_pattern, part):
                 flash("Ungültiges Arbeitstage-Format! Beispiel: Mo-Fr, Sa", "error")
                 return redirect(request.url)
 
-        # Валидация oeffnungszeiten (время работы)
-        time_pattern = r'^\d{2}:\d{2}-\d{2}:\d{2}$'  # Формат HH:MM-HH:MM
+        time_pattern = r'^\d{2}:\d{2}-\d{2}:\d{2}$'
         if not re.match(time_pattern, oeffnungszeiten):
             flash("Ungültiges Zeitformat! Beispiel: 09:00-22:00", "error")
             return redirect(request.url)
 
-        # Создание и добавление нового ресторана
         new_restaurant = Restaurant(
             name=name,
             email=email,
@@ -167,12 +153,10 @@ def registration_restaurants():
         db.session.add(new_restaurant)
         db.session.commit()
 
-        # Установка сессии
         session['user_email'] = email
         session['is_restaurant'] = True
         return redirect(url_for('main'))
 
-    # Если GET-запрос, отобразить форму
     return render_template("register_restaurants.html")
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -180,10 +164,9 @@ def profile():
     user_email = session.get('user_email')
     is_restaurant = session.get('is_restaurant')
 
-    if not user_email:  # Если пользователь не авторизован
+    if not user_email:
         return redirect(url_for('login'))
 
-    # Проверяем тип учетной записи
     if is_restaurant:
         entity = Restaurant.query.filter_by(email=user_email).first()
     else:
@@ -194,7 +177,6 @@ def profile():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        # Обновляем данные пользователя
         entity.vorname = request.form.get('vorname')
         entity.nachname = request.form.get('nachname')
         entity.email = request.form.get('email')
@@ -202,7 +184,7 @@ def profile():
         entity.postleitzahl = request.form.get('postleitzahl')
 
         try:
-            db.session.commit()  # Сохраняем изменения
+            db.session.commit()
             flash("Profil erfolgreich aktualisiert.", "success")
         except Exception as e:
             db.session.rollback()
@@ -212,11 +194,9 @@ def profile():
 
 @app.route('/restaurant_menu', methods=['GET', 'POST'])
 def restaurant_menu():
-    # Проверяем, пользователь - ресторан?
     if not session.get('is_restaurant'):
         return redirect(url_for('login'))
 
-    # Получить информацию о текущем ресторане
     restaurant_email = session.get('user_email')
     restaurant = Restaurant.query.filter_by(email=restaurant_email).first()
 
@@ -225,33 +205,28 @@ def restaurant_menu():
 
     if request.method == 'POST':
         try:
-            # Обработка данных формы
             item = request.form.get('item')
             beschreibung = request.form.get('beschreibung')
             preis = request.form.get('preis')
 
-            # Debug данных
             print(f"DEBUG: POST-Daten -> item: {item}, beschreibung: {beschreibung}, preis: {preis}")
 
-            if not item or not preis:  # Проверить обязательные поля
+            if not item or not preis:
                 flash("Das Gericht benötigt mindestens einen Namen und einen gültigen Preis.", 'danger')
                 return redirect(url_for('restaurant_menu'))
 
             try:
-                preis = float(preis)  # Конвертировать цену
+                preis = float(preis)
             except ValueError:
                 flash("Ungültiges Format für Preis. Bitte geben Sie eine Zahl ein.", "danger")
                 return redirect(url_for("restaurant_menu"))
 
-            # Убедиться, что у ресторана есть ID
             if not restaurant or not restaurant.id:
                 flash("Restaurant nicht gefunden. Bitte melden Sie sich erneut an.", "danger")
                 return redirect(url_for('login'))
 
-            # Лог ресторан
             print(f"DEBUG: Restaurant ID = {restaurant.id}")
 
-            # Создать новый пункт меню
             new_menu_item = Speisekarte(
                 item=item,
                 beschreibung=beschreibung,
@@ -259,7 +234,6 @@ def restaurant_menu():
                 restaurant_id=restaurant.id
             )
 
-            # Сохранить в базе данных
             db.session.add(new_menu_item)
             db.session.commit()
 
@@ -269,29 +243,23 @@ def restaurant_menu():
             print(f"DEBUG: Fehler beim Hinzufügen: {str(e)}")
             flash(f'Fehler beim Hinzufügen des Menüpunkts: {str(e)}', 'danger')
 
-    # Получить все элементы меню текущего ресторана
     menu_items = Speisekarte.query.filter_by(restaurant_id=restaurant.id).all()
 
-    # Вернуть рендеринг страницы
     return render_template('restaurant_menu.html', menu_items=menu_items, restaurant=restaurant)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Получение данных из формы
         email = request.form.get('email')
         passwort = request.form.get('passwort')
 
-        # 1. Попытка найти пользователя среди клиентов
         user = Kunde.query.filter_by(email=email, passwort=passwort).first()
         is_restaurant = False
 
-        # 2. Если клиент не найден, ищем среди ресторанов
         if not user:
             user = Restaurant.query.filter_by(email=email, passwort=passwort).first()
             is_restaurant = True
 
-        # 3. Если найден либо клиент, либо ресторан
         if user:
             session['user_email'] = email
             session['user_id'] = user.id
@@ -299,23 +267,20 @@ def login():
             print(f"Login successful: {email}, restaurant: {is_restaurant}")
             return redirect(url_for('main'))
 
-        # 4. Если пользователь не найден
         flash('Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail und Passwort.', 'error')
         return redirect(url_for('login'))
 
-    # При GET-запросе просто отображаем страницу логина
     return render_template("login.html")
 
 @app.route('/logout')
 def logout():
     session.pop('user_email', None)
-    session.pop('user_id', None)  # <-- Удаляем user_id из сессии
+    session.pop('user_id', None)
     session.pop('is_restaurant', None)
     return redirect(url_for('main'))
 
 @app.route('/restaurants', methods=['GET'])
 def restaurant_list():
-    # Получение списка всех ресторанов
     restaurants = Restaurant.query.all()
 
     open_restaurants = []
@@ -330,37 +295,27 @@ def restaurant_list():
     return render_template('restaurant_list.html', restaurants=open_restaurants)
 
 def is_restaurant_open(arbeitstage, oeffnungszeiten):
-    """
-    Проверяет, открыт ли ресторан в данный момент.
-    """
-    # Сопоставление дней недели с индексом Python
     weekday_map = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    now = datetime.now(timezone.utc)  # Используем текущее UTC-время
-    current_day = weekday_map[now.weekday()]  # Определяем текущий день недели (например, "Mo")
-    current_time = now.time()  # Текущее время
+    now = datetime.now(timezone.utc)
+    current_day = weekday_map[now.weekday()]
+    current_time = now.time()
 
-    # Парсим дни работы ресторана
-    parsed_days = parse_arbeitstage(arbeitstage)  # ['Mo', 'Di', 'Fr', ...]
+    parsed_days = parse_arbeitstage(arbeitstage)
 
-    # Если текущий день не входит в диапазон работы, сразу возвращаем False
     if current_day not in parsed_days:
         return False
 
-    # Парсим время работы ресторана
     open_time_str, close_time_str = oeffnungszeiten.split("-")
     open_time = datetime.strptime(open_time_str.strip(), "%H:%M").time()
     close_time = datetime.strptime(close_time_str.strip(), "%H:%M").time()
 
-    # Проверяем диапазон времени
     if open_time <= close_time:
-        # Если время работы находится в рамках одного дня
         print(f"DEBUG: Single day check: {open_time} <= {current_time} <= {close_time}")
         return open_time <= current_time <= close_time
     else:
-        # Исправленная логика для времени, захватывающего полночь
         print(f"DEBUG: Overnight check: {current_time} >= {open_time} or {current_time} <= {close_time}")
-        if close_time == time(0, 0):  # Обработка случая "00:30-00:00"
-            close_time_extended = time(23, 59, 59)  # Считаем полночь как конец текущего дня (24:00)
+        if close_time == time(0, 0):
+            close_time_extended = time(23, 59, 59)
             return open_time <= current_time or current_time <= close_time_extended
         return current_time >= open_time or current_time <= close_time
 
@@ -370,7 +325,6 @@ def update_profile_restaurant():
     if not session.get('is_restaurant') or not user_email:
         return redirect(url_for('login'))
 
-    # Получение данных из формы
     name = request.form.get('name')
     email = request.form.get('email')
     adresse = request.form.get('adresse')
@@ -379,7 +333,6 @@ def update_profile_restaurant():
     arbeitstage = request.form.get('arbeitstage')
     oeffnungszeiten = request.form.get('oeffnungszeiten')
 
-    # Валидация введенных данных
     weekday_pattern = r'^(?:Mo|Di|Mi|Do|Fr|Sa|So)(?:-(?:Mo|Di|Mi|Do|Fr|Sa|So))?$'
     time_pattern = r'^\d{2}:\d{2}-\d{2}:\d{2}$'
 
@@ -392,13 +345,11 @@ def update_profile_restaurant():
         flash("Ungültiges Zeitformat! Beispiel: 09:00-22:00", "error")
         return redirect(request.url)
 
-    # Поиск ресторана
     restaurant = Restaurant.query.filter_by(email=user_email).first()
     if not restaurant:
         flash('Restaurant nicht gefunden.', 'error')
         return redirect(url_for('profile'))
 
-    # Обновление данных
     restaurant.name = name
     restaurant.email = email
     restaurant.adresse = adresse
@@ -407,7 +358,6 @@ def update_profile_restaurant():
     restaurant.arbeitstage = arbeitstage
     restaurant.oeffnungszeiten = oeffnungszeiten
 
-    # Сохранение изменений
     db.session.commit()
 
     flash('Ihre Daten wurden erfolgreich aktualisiert.', 'success')
@@ -419,15 +369,15 @@ def parse_arbeitstage(arbeitstage):
 
     parts = arbeitstage.split(", ")
     for part in parts:
-        if "-" in part:  # Диапазон, например: Mo-Fr
+        if "-" in part:
             start, end = part.split("-")
             start_index = weekday_map.index(start)
             end_index = weekday_map.index(end) + 1
             days.update(weekday_map[start_index:end_index])
-        else:  # Один день, например: Sa
+        else:
             days.add(part)
 
-    return list(days)  # Пример вывода: ['Mo', 'Di', 'Mi', 'Do', 'Fr']
+    return list(days)
 
 def parse_oeffnungszeiten(oeffnungszeiten):
     start, end = oeffnungszeiten.split("-")
@@ -438,21 +388,17 @@ def menu_view(restaurant_id):
     restaurant = Restaurant.query.get_or_404(restaurant_id)
     menu_items = Speisekarte.query.filter_by(restaurant_id=restaurant.id).all()
 
-    # Вытаскиваем корзину из сессии
     cart = session.get('cart', [])
 
-    # Считаем общую сумму товаров в корзине (total_price)
     total_price = sum(item['price'] * item['quantity'] for item in cart if 'price' in item)
 
-    # Сохраняем ID текущего ресторана в сессии, чтобы вернуться назад при клике
     session['last_visited_restaurant_id'] = restaurant_id
 
-    # Передаём в шаблон данные о ресторане, меню и общей цене
     return render_template(
         "menu_view.html",
         restaurant=restaurant,
         menu_items=menu_items,
-        total_price=total_price  # Передаём уже посчитанную общую стоимость
+        total_price=total_price
     )
 
 @app.route('/edit_menu_item/<int:item_id>', methods=['POST'])
@@ -464,10 +410,9 @@ def edit_menu_item(item_id):
     menu_item.item = request.form.get('item')
     menu_item.beschreibung = request.form.get('beschreibung')
 
-    # Обновляем цену
     try:
         menu_item.preis = float(request.form.get('preis'))
-        db.session.commit()  # Сохраняем изменения в базе
+        db.session.commit()
         flash('Preis wurde erfolgreich aktualisiert.', 'success')
     except ValueError:
         flash('Ungültiger Wert für Preis.', 'error')
@@ -476,21 +421,16 @@ def edit_menu_item(item_id):
 
 @app.route('/delete_menu_item/<int:item_id>', methods=['POST'])
 def delete_menu_item(item_id):
-    """
-    Функция для удаления пунктов меню.
-    """
     if not session.get('is_restaurant'):
-        return redirect(url_for('login'))  # Перенаправление к логину, если пользователь не авторизован.
+        return redirect(url_for('login'))
 
-    # Поиск элемента меню по ID. Если не найден, вернуть 404 ошибку.
     menu_item = Speisekarte.query.get_or_404(item_id)
 
-    # Удаление элемента из базы данных.
     db.session.delete(menu_item)
     db.session.commit()
 
-    flash('Menüpunkt wurde erfolgreich gelöscht.', 'success')  # Сообщение об успешном удалении.
-    return redirect(url_for('restaurant_menu'))  # Перенаправление обратно на страницу меню.
+    flash('Menüpunkt wurde erfolgreich gelöscht.', 'success')
+    return redirect(url_for('restaurant_menu'))
 
 @app.route('/add_to_cart', methods=['POST'])
 def add_to_cart():
@@ -516,7 +456,6 @@ def add_to_cart():
         )
     session['cart'] = cart
 
-    # Формируем данные корзины для ответа
     cart_items = [
         {
             'id': item['id'],
@@ -567,7 +506,6 @@ def remove_from_cart():
 
 @app.template_filter('fromjson')
 def fromjson(value):
-    """Конвертирует строку JSON в Python-объект."""
     import json
     try:
         return json.loads(value)
@@ -594,22 +532,19 @@ def process_checkout():
             flash("Restaurant wurde nicht gefunden. Bitte erneut versuchen.", "error")
             return redirect(url_for('main'))
 
-        # Получаем товары из корзины (из сессии)
         cart = session.get('cart', [])
         if not cart:
             flash("Ihr Warenkorb ist leer. Bitte fügen Sie Artikel hinzu, bevor Sie eine Bestellung aufgeben.", "error")
             return redirect(url_for('menu_view', restaurant_id=restaurant_id))
 
-        # Примечания клиента
         bemerkungen = request.form.get('bemerkungen', '')
 
-        # Рассчитать общую стоимость заказа
         total_price = 0.0
         cart_snapshot = []
 
         for item in cart:
             menu_item = Speisekarte.query.get(item['id'])
-            if menu_item:  # Используем цену на момент заказа
+            if menu_item:
                 cart_item = {
                     'item_id': menu_item.id,
                     'name': menu_item.item,
@@ -620,19 +555,17 @@ def process_checkout():
                 cart_snapshot.append(cart_item)
                 total_price += item['quantity'] * menu_item.preis
 
-        # Сохраняем заказ в базу данных
         new_order = Bestellung(
             kunde_id=kunde_id,
             restaurant_id=restaurant_id,
-            inhalt=json.dumps(cart_snapshot),  # Сохраняем содержимое заказа как "снимок"
+            inhalt=json.dumps(cart_snapshot),
             bemerkungen=bemerkungen,
-            gesamtkosten=total_price,  # Поля total_price
+            gesamtkosten=total_price,
             erstellt_am=datetime.now(timezone.utc)
         )
         db.session.add(new_order)
         db.session.commit()
 
-        # Очищаем корзину
         session.pop('cart', None)
 
         return redirect(url_for('order_confirmation', order_id=new_order.id))
@@ -644,17 +577,14 @@ def process_checkout():
 
 @app.route('/order_confirmation/<int:order_id>')
 def order_confirmation(order_id):
-    # Предполагаемая логика для получения заказа
     order = db.session.query(Bestellung).filter_by(id=order_id).first()
 
-    # Проверяем, существует ли заказ
     if order is None:
         return "Order not found", 404
 
-    # Преобразование JSON-строки в словарь Python
     order_content = json.loads(order.inhalt)
 
-    print("order_content:", order_content)  # Отладочный вывод
+    print("order_content:", order_content)
 
     return render_template('order_confirmation.html', order=order, order_content=order_content)
 
@@ -665,13 +595,11 @@ def order_history():
         flash("Bitte melden Sie sich an, um Ihre Bestellungen zu sehen.", "error")
         return redirect(url_for('login'))
 
-    # Активные заказы: те, что только находятся "в обработке" или "готовятся" (приняты)
     orders_active = Bestellung.query.filter(
         Bestellung.kunde_id == kunde_id,
-        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])  # Только эти статусы
+        Bestellung.status.in_(['in Bearbeitung', 'angenommen'])
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
-    # Завершенные: отклоненные или уже выполненные
     orders_completed = Bestellung.query.filter(
         Bestellung.kunde_id == kunde_id,
         Bestellung.status.in_(['abgeschlossen', 'abgelehnt'])
@@ -684,32 +612,25 @@ def update_order_status(order_id):
     if not session.get('is_restaurant'):
         return redirect(url_for('login'))
 
-    # Получаем заказ
     order = Bestellung.query.get_or_404(order_id)
 
-    # Убедимся, что заказ принадлежит текущему ресторану
     restaurant_id = session.get('user_id')
     if order.restaurant_id != restaurant_id:
         flash("Вы не можете изменять этот заказ.", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    # Получаем новый статус из формы
     new_status = request.form.get('status')
 
-    # Варианты переходов статусов
     valid_status_transitions = {
         "in Bearbeitung": ["in Zubereitung", "storniert"],
         "in Zubereitung": ["abgeschlossen", "storniert"],
-        "storniert": [],  # Отмененный заказ больше нельзя изменить
-        "abgeschlossen": []  # Завершенный заказ больше нельзя изменить
+        "storniert": [],
+        "abgeschlossen": []
     }
 
-    # Проверка, допустим ли переход
     if new_status not in valid_status_transitions.get(order.status, []):
         flash(f"Недопустимый переход статуса: {order.status} → {new_status}.", "error")
         return redirect(url_for('order_history_restaurant'))
-
-    # Обновляем статус
     order.status = new_status
     db.session.commit()
 
@@ -723,16 +644,14 @@ def order_history_restaurant():
 
     restaurant_id = session.get('user_id')
 
-    # Изменяем фильтрацию для активных заказов
     orders_active = Bestellung.query.filter(
         Bestellung.restaurant_id == restaurant_id,
-        Bestellung.status.in_(['in Bearbeitung', 'in Zubereitung'])  # Учитываем статус "in Zubereitung"
+        Bestellung.status.in_(['in Bearbeitung', 'in Zubereitung'])
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
-    # Завершенные или отмененные заказы
     orders_completed = Bestellung.query.filter(
         Bestellung.restaurant_id == restaurant_id,
-        Bestellung.status.in_(['abgeschlossen', 'storniert'])  # Завершенные статусы
+        Bestellung.status.in_(['abgeschlossen', 'storniert'])
     ).order_by(Bestellung.erstellt_am.desc()).all()
 
     return render_template(
@@ -746,27 +665,21 @@ def order_details(order_id):
     if not session.get('is_restaurant') and not session.get('user_email'):
         return redirect(url_for('login'))
 
-    # Найти заказ по его ID
     order = Bestellung.query.get_or_404(order_id)
 
     try:
-        # Извлечь сохранённое содержимое заказа (JSON)
         order_content = json.loads(order.inhalt)
 
-        # Нет необходимости проверять таблицу Speisekarte; берем данные прямо из заказа
         for item in order_content:
             if 'name' not in item or 'price_at_order' not in item:
-                # Если данные повреждены, добавляем сообщение об ошибке
                 item['name'] = "Unbekanntes Gericht"
                 item['price_at_order'] = 0.0
-            # quantity проверяется на всякий случай
             item['quantity'] = item.get('quantity', 0)
 
     except (TypeError, ValueError) as e:
         flash(f"Fehler beim Verarbeiten der Bestelldetails: {e}", "error")
         return redirect(url_for('order_history_restaurant'))
 
-    # Вычисляем общую сумму заказа
     total_cost = sum(item['price_at_order'] * item['quantity'] for item in order_content)
 
     return render_template(
@@ -778,13 +691,13 @@ def order_details(order_id):
 
 @app.route('/clear_cart')
 def clear_cart():
-    session.pop('cart', None)  # Удаляем корзину из сессии
+    session.pop('cart', None)
     flash('Ihr Warenkorb wurde geleert.', 'success')
     return redirect(request.referrer or url_for('checkout'))
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # Создание таблиц
+        db.create_all()
     app.run(debug=True)
     app.run(threaded=False)
 
