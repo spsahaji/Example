@@ -35,6 +35,8 @@ class Kunde(db.Model):
     adresse = db.Column(db.String(255), nullable=False)
     postleitzahl = db.Column(db.String(20), nullable=False)
     passwort = db.Column(db.String(120), nullable=False)
+    balance = db.Column(db.Float, default=100.0)  # Новый клиентский баланс
+
 
 class Restaurant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -44,9 +46,17 @@ class Restaurant(db.Model):
     postleitzahl = db.Column(db.String(20), nullable=False)
     beschreibung = db.Column(db.String(255), nullable=True)
     passwort = db.Column(db.String(120), nullable=False)
-
     arbeitstage = db.Column(db.String(255), nullable=False)
     oeffnungszeiten = db.Column(db.String(255), nullable=False)
+    balance = db.Column(db.Float, default=0.0)  # Баланс ресторана
+
+
+# Глобальный баланс для платформы Lieferspatz
+lieferspatz_balance = 0.0
+
+class PlattformGuthaben(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    balance = db.Column(db.Float, nullable=False, default=0.0)
 
 class Speisekarte(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -522,16 +532,19 @@ def checkout():
 @app.route('/process_checkout', methods=['POST'])
 def process_checkout():
     try:
+        # Проверяем, залогинен ли пользователь
         kunde_id = session.get('user_id')
         if not kunde_id:
             flash("Sie müssen sich anmelden, um Ihre Bestellung abzuschließen.", "error")
             return redirect(url_for('login'))
 
+        # Проверяем, выбрано ли ресторанное меню
         restaurant_id = session.get('last_visited_restaurant_id')
         if not restaurant_id:
             flash("Restaurant wurde nicht gefunden. Bitte erneut versuchen.", "error")
             return redirect(url_for('main'))
 
+        # Проверяем, не пустая ли корзина
         cart = session.get('cart', [])
         if not cart:
             flash("Ihr Warenkorb ist leer. Bitte fügen Sie Artikel hinzu, bevor Sie eine Bestellung aufgeben.", "error")
@@ -539,6 +552,7 @@ def process_checkout():
 
         bemerkungen = request.form.get('bemerkungen', '')
 
+        # Подготовка данных для корзины и расчет общей суммы заказа
         total_price = 0.0
         cart_snapshot = []
 
@@ -555,6 +569,34 @@ def process_checkout():
                 cart_snapshot.append(cart_item)
                 total_price += item['quantity'] * menu_item.preis
 
+       # Проверяем баланс клиента
+        customer = Kunde.query.get(kunde_id)
+        if customer.balance < total_price:
+            flash("Nicht genügend Guthaben für diese Bestellung.", "error")
+            return redirect(url_for('checkout'))
+
+        # Снимаем деньги с баланса клиента (но только временно, до успешного завершения заказа)
+        customer.balance -= total_price
+
+        # Получаем ресторан
+        restaurant = Restaurant.query.get(restaurant_id)
+
+        # Обновление баланса ресторанов на основе успешного расчета комиссии
+        lieferspatz_cut = round(total_price * 0.15, 2)  # Комиссия Lieferspatz (15%)
+        restaurant_earnings = round(total_price * 0.85, 2)  # Доход ресторана (85%)
+
+        restaurant.balance += restaurant_earnings  # Увеличиваем баланс ресторана
+
+        plattform_guthaben = PlattformGuthaben.query.first()
+        if not plattform_guthaben:
+            # Если запись для платформы отсутствует, создаем её
+            plattform_guthaben = PlattformGuthaben(balance=0.0)
+            db.session.add(plattform_guthaben)
+
+        # Увеличиваем баланс платформы
+        plattform_guthaben.balance += lieferspatz_cut
+
+        # Создаем заказ
         new_order = Bestellung(
             kunde_id=kunde_id,
             restaurant_id=restaurant_id,
@@ -564,16 +606,51 @@ def process_checkout():
             erstellt_am=datetime.now(timezone.utc)
         )
         db.session.add(new_order)
-        db.session.commit()
+        db.session.commit()  # Успешная транзакция, сохраняем изменения
 
+        # Очистка корзины
         session.pop('cart', None)
 
+        # Учет баланса Lieferspatz
+        global lieferspatz_balance
+        lieferspatz_balance += lieferspatz_cut
+
+        # Обновляем сессионный баланс клиента
+        session['balance'] = round(customer.balance, 2)
+
+        # Переходим на страницу подтверждения заказа
         return redirect(url_for('order_confirmation', order_id=new_order.id))
 
     except Exception as e:
+        # При возникновении ошибки откатываем транзакцию
         db.session.rollback()
+
+        # Возвращаем баланс клиента, если он был уменьшен
+        customer = Kunde.query.get(kunde_id)
+        if customer and 'total_price' in locals():
+            customer.balance += total_price
+            db.session.commit()
+
+        # Сообщаем об ошибке
         flash(f"Fehler bei der Bestellung: {e}", "error")
         return redirect(url_for('checkout'))
+
+@app.context_processor
+def inject_balance():
+    user_email = session.get('user_email')
+    if user_email:
+        # Если ресторан
+        if session.get('is_restaurant'):
+            restaurant = Restaurant.query.filter_by(email=user_email).first()
+            if restaurant:
+                return {'balance': round(restaurant.balance, 2)}
+        # Если клиент
+        else:
+            customer = Kunde.query.filter_by(email=user_email).first()
+            if customer:
+                return {'balance': round(customer.balance, 2)}
+    # Если пользователь не авторизован или баланс не доступен
+    return {'balance': None}
 
 @app.route('/order_confirmation/<int:order_id>')
 def order_confirmation(order_id):
@@ -695,8 +772,19 @@ def clear_cart():
     flash('Ihr Warenkorb wurde geleert.', 'success')
     return redirect(request.referrer or url_for('checkout'))
 
+@app.route('/lieferspatz_balance')
+def lieferspatz_balance_view():
+    plattform_guthaben = PlattformGuthaben.query.first()
+    if not plattform_guthaben:
+        return "Plattform-Guthaben nicht gefunden.", 404
+
+    return f"Der aktuelle Plattform-Guthaben beträgt: {plattform_guthaben.balance:.2f} €"
+
 if __name__ == '__main__':
     with app.app_context():
+        if not PlattformGuthaben.query.first():
+            db.session.add(PlattformGuthaben(balance=0.0))
+            db.session.commit()
         db.create_all()
     app.run(debug=True)
     app.run(threaded=False)

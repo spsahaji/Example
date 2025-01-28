@@ -25,9 +25,19 @@
             </ul>
 
             <!-- Тоггл (правая часть хедера) -->
-            <div class="text-end">
+            <div class="text-end d-flex align-items-center">
                 {% if session.get('user_email') %}
-                    <!-- Пользователь авторизован -->
+                    <!-- Баланс -->
+                        {% if balance is not none %}
+                        <span class="me-3 text-white">
+                            {% if session.get('is_restaurant') %}
+                                Restaurant-Balance: {{ balance }} €
+                            {% else %}
+                                Benutzer-Balance: {{ balance }} €
+                            {% endif %}
+                        </span>
+                    {% endif %}
+                    <!-- Меню пользователя -->
                     <div class="dropdown d-inline">
                         <button class="btn btn-orange dropdown-toggle" type="button" id="dropdownMenuButton"
                                 data-bs-toggle="dropdown" aria-expanded="false">
@@ -35,20 +45,18 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton">
                             <li><a class="dropdown-item" href="/profile">Profil</a></li>
-
-                            <!-- Ссылка Alle Bestellungen -->
                             {% if session.get('is_restaurant') %}
                                 <li><a class="dropdown-item" href="{{ url_for('order_history_restaurant') }}">Alle Bestellungen</a></li>
                             {% else %}
                                 <li><a class="dropdown-item" href="{{ url_for('order_history') }}">Alle Bestellungen</a></li>
                             {% endif %}
-
                             <li><a class="dropdown-item" href="/logout">Abmelden</a></li>
                         </ul>
                     </div>
                 {% else %}
                     <!-- Пользователь НЕ авторизован -->
-                    <button type="button" class="btn btn-outline-light me-2" onclick="window.location.href='/registration_restaurants';">Partner werden</button>
+                    <button type="button" class="btn btn-outline-light me-2"
+                            onclick="window.location.href='/registration_restaurants';">Partner werden</button>
                     <button type="button" class="btn btn-orange" onclick="window.location.href='/login';">Anmelden</button>
                 {% endif %}
             </div>
